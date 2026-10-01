@@ -42,12 +42,7 @@ class MoviesViewModel(
     }
 
     private fun observeFavorites() {
-        viewModelScope.launch {
-            observeFavoriteIds().collect { ids ->
-                favoriteIds = ids
-                // TODO (passo 2): atualizar a lista do estado com os favoritos novos
-            }
-        }
+        // TODO (passo 2): atualizar favoriteIds e a lista do UiState com os favoritos novos
     }
 
     fun onQueryChange(query: String) {
