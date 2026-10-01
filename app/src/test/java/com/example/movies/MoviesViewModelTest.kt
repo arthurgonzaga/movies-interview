@@ -43,8 +43,11 @@ class MoviesViewModelTest {
 
         val matrix = state.movies.first { it.title == "The Matrix" }
         assertEquals("1999", matrix.year)
-        assertEquals("8.7", matrix.rating)
+        assertEquals("8.7", matrix.rating.replace(",", "."))
         assertFalse(matrix.isFavorite)
+
+        val interstellar = state.movies.first { it.title == "Interstellar" }
+        assertEquals("8.6", interstellar.rating.replace(",", "."))
     }
 
     @Test
@@ -58,6 +61,19 @@ class MoviesViewModelTest {
 
         val matrix = vm.uiState.value.movies.first { it.id == 1 }
         assertTrue("o item da lista deveria refletir o favorito", matrix.isFavorite)
+    }
+
+    @Test
+    fun `favorito alterado no repositorio reflete na lista`() = runTest {
+        val repo = FakeMovieRepository()
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        repo.toggleFavorite(2)
+        advanceUntilIdle()
+
+        val inception = vm.uiState.value.movies.first { it.id == 2 }
+        assertTrue("isFavorite deveria vir do observeFavoriteIds", inception.isFavorite)
     }
 
     @Test
@@ -114,5 +130,25 @@ class MoviesViewModelTest {
         val state = vm.uiState.value
         assertNull(state.errorMessage)
         assertTrue(state.movies.isNotEmpty())
+    }
+
+    @Test
+    fun `retry apos erro na busca repete a busca`() = runTest {
+        val repo = FakeMovieRepository().apply { failSearch = true }
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.onQueryChange("matrix")
+        advanceUntilIdle()
+        assertNotNull("deveria expor uma mensagem de erro", vm.uiState.value.errorMessage)
+
+        repo.failSearch = false
+        vm.retry()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertNull(state.errorMessage)
+        assertEquals("matrix", state.query)
+        assertEquals(listOf("The Matrix"), state.movies.map { it.title })
     }
 }

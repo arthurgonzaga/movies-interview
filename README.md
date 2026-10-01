@@ -1,69 +1,108 @@
-# Movies — Entrevista Android (Live Coding)
+# Desafio: MoviesViewModel
 
-App Android de **catálogo de filmes** com busca e favoritos, em **Clean Architecture**
-(data → domain → presentation), Jetpack Compose e Coroutines/Flow.
+O app (busca de filmes + favoritos) já está pronto: data, domain e a tela Compose.
+**Falta só o `MoviesViewModel`**, em
+`app/src/main/java/com/example/movies/presentation/MoviesViewModel.kt`.
 
-As camadas **data**, **domain** e a **UI (Compose)** já estão prontas e funcionais.
-O que falta é a implementação do **`MoviesViewModel`** — a ponte entre os use cases e a
-tela. A entrevista termina quando **todos os testes passarem**.
-
-## Pré-requisitos
-
-- Android Studio (Ladybug ou mais recente) **ou** JDK 17 + Android SDK 34.
-- Não precisa de internet: os dados vêm de uma "API" fake em memória.
-
-## Como rodar
+Você termina quando isto ficar verde:
 
 ```bash
-# Testes (é o que precisa ficar verde)
 ./gradlew :app:testDebugUnitTest
-
-# Rodar o app num emulador/dispositivo
-./gradlew :app:installDebug
 ```
 
-### Rodando no Android Studio
+Não altere os testes nem as outras camadas. Pode perguntar à vontade.
 
-1. **File → Open** e selecione a **pasta raiz** do projeto (a que tem o `settings.gradle.kts`),
-   não um arquivo nem a pasta `app`.
-2. Confie no projeto quando ele perguntar e **espere o Gradle Sync terminar** (barra de
-   progresso embaixo). O ▶ só aparece depois de um sync bem-sucedido.
-3. Se o ▶ não aparecer ou não reconhecer como app Android, force um sync:
-   **File → Sync Project with Gradle Files** (ícone do elefante do Gradle na toolbar).
-4. Confira o **Gradle JDK**: Settings → Build, Execution, Deployment → Build Tools →
-   Gradle → **Gradle JDK = 17** (ou o JBR embutido do Studio).
-5. Persistindo: **File → Invalidate Caches / Restart…**, reabra e deixe sincronizar.
+## Como o app está hoje
 
-> Já vem uma run configuration "app" pronta em `.run/app.run.xml`; após o sync ela (ou a
-> criada automaticamente) fica disponível no seletor ao lado do ▶.
+Ao abrir o app você vê um **loading infinito**: o ViewModel ainda não faz nada.
 
-## Tarefa
+![Loading infinito](docs/images/01-loading.png)
 
-Abra **[CANDIDATO.md](CANDIDATO.md)**. Resumo: implemente `MoviesViewModel`
-(`app/src/main/java/com/example/movies/presentation/MoviesViewModel.kt`) para que os
-testes em `MoviesViewModelTest` passem. Não altere os testes nem as outras camadas
-(a menos que combine com o entrevistador).
+## Use cases disponíveis
 
-> Entrevistador: gabarito e roteiro em **[ENTREVISTADOR.md](ENTREVISTADOR.md)**.
+| Use case | Retorno |
+|---|---|
+| `getPopularMovies()` | `List<Movie>` (suspend) |
+| `searchMovies(query)` | `List<Movie>` (suspend) |
+| `observeFavoriteIds()` | `Flow<Set<Int>>` |
+| `toggleFavorite(id)` | `Unit` (suspend) |
 
-## Arquitetura
+---
 
-```
-presentation/   Compose + ViewModel (VOCÊ implementa o ViewModel)
-   MoviesScreen.kt        # tela pronta, consome MoviesUiState
-   MoviesUiState.kt       # MoviesUiState + MovieUi (modelo de UI)
-   MoviesViewModel.kt     # <<< só a estrutura; implemente aqui
-domain/         Regras e contratos (pronto)
-   model/Movie.kt
-   repository/MovieRepository.kt
-   usecase/MovieUseCases.kt   # GetPopular, Search, ToggleFavorite, ObserveFavoriteIds
-data/           Fontes de dados (pronto)
-   remote/FakeMovieApi.kt + MovieDto.kt   # "API" fake com latência/erro
-   local/FavoritesLocalDataSource.kt      # favoritos em memória (Flow)
-   MovieRepositoryImpl.kt                 # mapeia DTO -> domínio
-di/ServiceLocator.kt   # DI manual (sem Hilt), monta o ViewModel
+## Passo 1: carga inicial e formatação
+
+Ao criar o ViewModel, carregar os populares. Enquanto carrega, `isLoading = true`.
+Converter `Movie` em `MovieUi`:
+
+| `Movie` | `MovieUi` |
+|---|---|
+| `year = 1999` | `year = "1999"` |
+| `rating = 8.7` | `rating = "8.7"` ou `"8,7"` (uma casa decimal) |
+| | `isFavorite` |
+
+| Carregando | Carregado |
+|:---:|:---:|
+| ![Carregando](docs/images/01-loading.png) | ![Carregado](docs/images/02-lista.png) |
+
+**Teste:** `carga inicial carrega populares e formata year e rating`
+
+```bash
+./gradlew :app:testDebugUnitTest --tests "*carga inicial carrega*"
 ```
 
-O fluxo de dados: `MoviesViewModel` chama use cases → use cases chamam `MovieRepository`
-→ `MovieRepositoryImpl` usa a API fake + favoritos e converte `MovieDto` em `Movie`.
-Você converte `Movie` em `MovieUi` e expõe `MoviesUiState` para a tela.
+## Passo 2: favoritar
+
+`onToggleFavorite(id)` alterna o favorito. O coração precisa mudar **na lista atual, sem
+recarregar da API**.
+
+| Antes | Depois de tocar no coração do Matrix |
+|:---:|:---:|
+| ![Antes](docs/images/02-lista.png) | ![Favoritado](docs/images/03-favorito.png) |
+
+**Testes:** `favoritar marca o filme como favorito na lista` e
+`favorito alterado no repositorio reflete na lista`
+
+```bash
+./gradlew :app:testDebugUnitTest --tests "*favorit*"
+```
+
+## Passo 3: busca
+
+`onQueryChange(query)` atualiza `query` no estado e busca os filmes.
+Query em branco volta para os populares.
+
+| Busca `"matrix"` | Query apagada → populares |
+|:---:|:---:|
+| ![Busca](docs/images/04-busca.png) | ![Query vazia](docs/images/05-query-vazia.png) |
+
+**Testes:** `busca filtra os filmes e atualiza a query no estado` e
+`query em branco volta para os populares`
+
+```bash
+./gradlew :app:testDebugUnitTest --tests "*busca*" --tests "*query em branco*"
+```
+
+## Passo 4: erro e retry
+
+Se o use case lançar exceção: preencher `errorMessage`, sair do loading e não crashar.
+`retry()` repete a última operação.
+
+No app, digite **`erro`** na busca para simular uma falha de rede.
+
+| Erro | Tocou em "Tentar novamente" | Refez a busca `"erro"` (falha de novo) |
+|:---:|:---:|:---:|
+| ![Erro](docs/images/06-erro.png) | ![Retry carregando](docs/images/07-retry-loading.png) | ![Retry com erro](docs/images/08-retry-erro.png) |
+
+**Testes:** `erro na carga inicial expoe mensagem e sai do loading`,
+`retry apos erro recarrega com sucesso` e `retry apos erro na busca repete a busca`
+
+```bash
+./gradlew :app:testDebugUnitTest --tests "*erro na carga*" --tests "*retry*"
+```
+
+---
+
+## O que avaliamos
+
+Clareza ao explicar o raciocínio, modelagem do estado, uso de coroutines/Flow, tratamento
+de erro e como você sai da falha pro verde (testando hipóteses, não chutando).

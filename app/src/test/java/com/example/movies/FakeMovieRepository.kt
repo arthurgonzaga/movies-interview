@@ -12,7 +12,7 @@ class FakeMovieRepository : MovieRepository {
     val popular: List<Movie> = listOf(
         Movie(1, "The Matrix", 1999, 8.7),
         Movie(2, "Inception", 2010, 8.8),
-        Movie(3, "Interstellar", 2014, 8.6),
+        Movie(3, "Interstellar", 2014, 8.64),
     )
 
     var failGetPopular: Boolean = false
